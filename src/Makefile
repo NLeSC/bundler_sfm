@@ -80,9 +80,9 @@ $(KEYMATCHFULL): KeyMatchFull.o keys2a.o
 	cp $@ ../bin
 
 $(KEYMATCHPART): KeyMatchPart.o keys2a.o
-        $(CXX) -o $@ $(CPPFLAGS) $(LIB_PATH) KeyMatchPart.o keys2a.o \
-                -lANN_char -lz
-        cp $@ ../bin
+	$(CXX) -o $@ $(CPPFLAGS) $(LIB_PATH) KeyMatchPart.o keys2a.o \
+		-lANN_char -lz
+	cp $@ ../bin
 
 $(BUNDLE2PLY): Bundle2Ply.o
 	$(CXX) -o $@ $(CPPFLAGS) $(LIB_PATH) Bundle2Ply.o \
