@@ -956,10 +956,20 @@ void ImageData::CacheDimensions()
 
         if (strcmp(m_name + len - 3, "pgm") == 0)
             img_read_pgm_dimensions(m_name, &w, &h);
+        else if (strcmp(m_name + len - 3, "PGM") == 0)
+            img_read_pgm_dimensions(m_name, &w, &h);
         else if (strcmp(m_name + len - 3, "bmp") == 0)
+	    bmp_file_get_dimensions(m_name, &w, &h);
+        else if (strcmp(m_name + len - 3, "BMP") == 0)
 	    bmp_file_get_dimensions(m_name, &w, &h);
         else if (strcmp(m_name + len - 3, "jpg") == 0)
             GetJPEGDimensions(m_name, w, h);
+        else if (strcmp(m_name + len - 3, "JPG") == 0)
+            GetJPEGDimensions(m_name, w, h);
+        else {
+	    fprintf(stderr, "Unknown image type %s", m_name);
+            exit(1);
+        }
     } else {
 	/* Create the bmp file */
 	char bmp_file[256];
