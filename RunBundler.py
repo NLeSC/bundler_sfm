@@ -632,7 +632,7 @@ def create_dense_pointcloud(image_names, image_list='list.txt', bundle_out="bund
 
     # Run genOption to generate the required PMVS2 config.
     # FIXME: hardcoded level! 1 is standard, 0 produces hi-res pointclouds!
-    subprocess.call([BIN_GEN_OPTION, os.path.join('.', 'pmvs', ''), '1'], env=env)
+    subprocess.call([BIN_GEN_OPTION, os.path.join('.', 'pmvs', ''), '0'], env=env)
 
     # Run genOption to generate the required PMVS2 config.
     subprocess.call([BIN_PMVS2, os.path.join('.', 'pmvs', ''), 'option-0000'], env=env)
