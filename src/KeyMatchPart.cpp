@@ -107,12 +107,10 @@ int main(int argc, char **argv) {
     }
 
     clock_t end = clock();
-    printf("[KeyMatchFull] Reading keys took %0.3fs\n", 
-           (end - start) / ((double) CLOCKS_PER_SEC));
+    printf("[KeyMatchPart %d] Reading keys took %0.3fs\n", 
+           start_image, (end - start) / ((double) CLOCKS_PER_SEC));
 
     if (num_keys[start_image] > 0) {
-
-        printf("[KeyMatchPart] Matching to image %d\n", start_image);
 
         start = clock();
 
@@ -148,7 +146,7 @@ int main(int argc, char **argv) {
         }
 
         end = clock();
-        printf("[KeyMatchPart] Matching took %0.3fs\n", (end - start) / ((double) CLOCKS_PER_SEC));
+        printf("[KeyMatchPart %d] Matching took %0.3fs\n", start_image, (end - start) / ((double) CLOCKS_PER_SEC));
         fflush(stdout);
 
         delete tree;
