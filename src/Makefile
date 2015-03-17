@@ -11,6 +11,7 @@ OTHERFLAGS=-std=gnu++0x
 OS=$(shell uname -o)
 
 ifeq ($(OS), Cygwin)
+SIFT=Sift.exe
 BUNDLER=bundler.exe
 KEYMATCHFULL=KeyMatchFull.exe
 KEYMATCHPART=KeyMatchPart.exe
@@ -18,6 +19,7 @@ BUNDLE2PMVS=Bundle2PMVS.exe
 BUNDLE2VIS=Bundle2Vis.exe
 RADIALUNDISTORT=RadialUndistort.exe
 else
+SIFT=Sift
 BUNDLER=bundler
 KEYMATCHFULL=KeyMatchFull
 KEYMATCHPART=KeyMatchPart
@@ -72,6 +74,11 @@ all: $(BUNDLER) $(KEYMATCHFULL) $(BUNDLE2PLY) $(BUNDLE2PMVS) $(BUNDLE2VIS) $(RAD
 $(BUNDLER): $(BUNDLER_OBJS)
 	$(CXX) -o $@ $(CPPFLAGS) $(LIB_PATH) \
 		$(BUNDLER_DEFINES) $(BUNDLER_OBJS) $(BUNDLER_LIBS)
+	cp $@ ../bin
+
+$(SIFT): Sift.o
+	$(CXX) -o $@ $(CPPFLAGS) $(LIB_PATH) Sift.o  \
+		-lANN_char -lz
 	cp $@ ../bin
 
 $(KEYMATCHFULL): KeyMatchFull.o keys2a.o
