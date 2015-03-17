@@ -54,8 +54,8 @@ as output."""
 #   - jhead
 
 MOD_PATH = os.path.dirname(__file__)
-BIN_PATH = os.path.join(MOD_PATH, "../bin")
-LIB_PATH = os.path.join(MOD_PATH, "../lib")
+BIN_PATH = os.path.join(MOD_PATH, "./bin")
+LIB_PATH = os.path.join(MOD_PATH, "./lib")
 BIN_SIFT = None
 BIN_BUNDLER = None
 BIN_MATCHKEYS = None
