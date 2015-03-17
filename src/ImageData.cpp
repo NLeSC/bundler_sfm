@@ -295,16 +295,28 @@ void ImageData::LoadImage() {
     bmp_buf[strlen(m_name) - 2] = 'm';
     bmp_buf[strlen(m_name) - 1] = 'p';
 
+    char BMP_buf[256];
+    strcpy(bmp_buf, m_name);
+    bmp_buf[strlen(m_name) - 3] = 'B';
+    bmp_buf[strlen(m_name) - 2] = 'M';
+    bmp_buf[strlen(m_name) - 1] = 'P';
+
+    char JPEG_buf[256];
+    strcpy(jpeg_buf, m_name);
+    jpeg_buf[strlen(m_name) - 3] = 'J';
+    jpeg_buf[strlen(m_name) - 2] = 'P';
+    jpeg_buf[strlen(m_name) - 1] = 'G';
+
     img_t *img;
 
     if (FileExists(jpeg_buf)) {
-        // printf("[ImageData::LoadImage] Reading JPEG...\n");
         img = LoadJPEG(jpeg_buf);
-
-        // printf("[ImageData::LoadImage] Dimensions: %d x %d\n", 
-        //        img->w, img->h);
     } else if (FileExists(bmp_buf)) {
         img = img_read_bmp_file(bmp_buf);
+    } else if (FileExists(JPEG_buf)) {
+        img = LoadJPEG(JPEG_buf);
+    } else if (FileExists(BMP_buf)) {
+        img = img_read_bmp_file(BMP_buf);
     } else {
         img = img_read_pgm_file(m_name);
     }
@@ -954,17 +966,11 @@ void ImageData::CacheDimensions()
 
 	  int len = strlen(m_name);
 
-        if (strcmp(m_name + len - 3, "pgm") == 0)
+        if (strcasecmp(m_name + len - 3, "pgm") == 0)
             img_read_pgm_dimensions(m_name, &w, &h);
-        else if (strcmp(m_name + len - 3, "PGM") == 0)
-            img_read_pgm_dimensions(m_name, &w, &h);
-        else if (strcmp(m_name + len - 3, "bmp") == 0)
+        else if (strcasecmp(m_name + len - 3, "bmp") == 0)
 	    bmp_file_get_dimensions(m_name, &w, &h);
-        else if (strcmp(m_name + len - 3, "BMP") == 0)
-	    bmp_file_get_dimensions(m_name, &w, &h);
-        else if (strcmp(m_name + len - 3, "jpg") == 0)
-            GetJPEGDimensions(m_name, w, h);
-        else if (strcmp(m_name + len - 3, "JPG") == 0)
+        else if (strcasecmp(m_name + len - 3, "jpg") == 0)
             GetJPEGDimensions(m_name, w, h);
         else {
 	    fprintf(stderr, "Unknown image type %s", m_name);
@@ -973,27 +979,45 @@ void ImageData::CacheDimensions()
     } else {
 	/* Create the bmp file */
 	char bmp_file[256];
+	char jpg_file[256];
+	char BMP_file[256];
+	char JPG_file[256];
+
 	strcpy(bmp_file, m_name);
 
 	bmp_file[strlen(m_name) - 3] = 'b';
 	bmp_file[strlen(m_name) - 2] = 'm';
 	bmp_file[strlen(m_name) - 1] = 'p';
 
+	strcpy(jpg_file, m_name);
+
+	bmp_file[strlen(m_name) - 3] = 'j';
+	bmp_file[strlen(m_name) - 2] = 'p';
+	bmp_file[strlen(m_name) - 1] = 'g';
+
+	strcpy(BMP_file, m_name);
+
+	bmp_file[strlen(m_name) - 3] = 'B';
+	bmp_file[strlen(m_name) - 2] = 'M';
+	bmp_file[strlen(m_name) - 1] = 'P';
+
+	strcpy(JPG_file, m_name);
+
+	bmp_file[strlen(m_name) - 3] = 'J';
+	bmp_file[strlen(m_name) - 2] = 'P';
+	bmp_file[strlen(m_name) - 1] = 'G';
+
 	if (FileExists(bmp_file)) {
 	    bmp_file_get_dimensions(bmp_file, &w, &h);
-	} else {
-	    char jpeg_file[256];
-	    strcpy(jpeg_file, m_name);
-	    jpeg_file[strlen(m_name) - 3] = 'j';
-	    jpeg_file[strlen(m_name) - 2] = 'p';
-	    jpeg_file[strlen(m_name) - 1] = 'g';
-	    
-            if (FileExists(jpeg_file)) {
-                GetJPEGDimensions(jpeg_file, w, h);
-            } else {
-                printf("[ImageData::CacheDimensions] Fatal error: "
-                       "couldn't read image %s\n", m_name);
-            }
+        } else if (FileExists(BMP_file)) {
+	    bmp_file_get_dimensions(BMP_file, &w, &h);
+        } else if (FileExists(jpg_file)) {
+            GetJPEGDimensions(jpg_file, w, h);
+        } else if (FileExists(JPG_file)) {
+            GetJPEGDimensions(JPG_file, w, h);
+        } else {
+            printf("[ImageData::CacheDimensions] Fatal error: "
+                     "couldn't read image %s\n", m_name);
 	}
     }
 
