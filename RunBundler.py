@@ -28,7 +28,11 @@ import Image
 import glob
 import subprocess
 import tempfile
-from multiprocessing import Pool
+import fileinput
+import shutil
+import time
+
+from multiprocessing.pool import ThreadPool
 from PIL import Image, ExifTags
 
 VERSION = "Bundler 0.4"
@@ -55,6 +59,12 @@ LIB_PATH = os.path.join(MOD_PATH, "../lib")
 BIN_SIFT = None
 BIN_BUNDLER = None
 BIN_MATCHKEYS = None
+BIN_MATCHKEYS_PART = None
+BIN_BUNDLE2PMVS = None
+BIN_RADIAL_UNDISTORT = None
+BIN_CMVS = None
+BIN_GEN_OPTION = None
+BIN_PMVS2 = None
 
 CCD_WIDTHS = {
      "Asahi Optical Co.,Ltd.  PENTAX Optio330RS" : 7.176, # 1/1.8"
@@ -70,6 +80,7 @@ CCD_WIDTHS = {
      "Canon Canon DIGITAL IXUS 750"              : 7.176,  # 1/1.8"
      "Canon Canon DIGITAL IXUS 800 IS"           : 5.76,   # 1/2.5"
      "Canon Canon DIGITAL IXUS II"               : 5.27,   # 1/2.7"
+     "Canon Canon IXUS 240 HS"                   : 6.16,   # 1/2.3"
      "Canon Canon EOS 10D"                       : 22.7,
      "Canon Canon EOS-1D Mark II"                : 28.7,
      "Canon Canon EOS-1Ds Mark II"               : 35.95,   
@@ -87,6 +98,7 @@ CCD_WIDTHS = {
      "Canon Canon EOS DIGITAL REBEL XT"          : 22.2,
      "Canon Canon EOS DIGITAL REBEL XTi"         : 22.2,
      "Canon Canon EOS Kiss Digital"              : 22.66,
+     "Canon Canon EOS 1100D"                     : 22.2,
      "Canon Canon IXY DIGITAL 600"               : 7.176,  # 1/1.8"
      "Canon Canon PowerShot A20"                 : 7.176,  # 1/1.8"
      "Canon Canon PowerShot A400"                : 4.54,   # 1/3.2"
@@ -145,6 +157,7 @@ CCD_WIDTHS = {
      "Canon Canon PowerShot SD800 IS"            : 5.76,   # 1/2.5"
      "Canon Canon PowerShot SX500 IS"            : 6.17,   # 1/2.3"
      "Canon EOS 300D DIGITAL"                    : 22.66,
+     "Canon EOS 1100D"                           : 22.2,
      "Canon EOS DIGITAL REBEL"                   : 22.66,
      "Canon PowerShot A510"                      : 5.76,   # 1/2.5" ???
      "Canon PowerShot S30"                       : 7.176,  # 1/1.8"
@@ -286,6 +299,8 @@ CCD_WIDTHS = {
      "Panasonic DMC-LZ2"                         : 5.76,   # 1/2.5"
      "Panasonic DMC-TZ1"                         : 5.75,   # 1/2.5"
      "Panasonic DMC-TZ3"                         : 5.68,   # 1/2.35"
+     "Panasonic DMC-TZ10"                        : 6.23,
+     "Panasonic HC-X900"                         : 3.20,
      "PENTAX Corporation  PENTAX *ist DL"        : 23.5,
      "PENTAX Corporation  PENTAX *ist DS2"       : 23.5,
      "PENTAX Corporation  PENTAX *ist DS"        : 23.5,
@@ -332,6 +347,7 @@ CCD_WIDTHS = {
 
 def get_images():
     """Searches the present directory for JPEG images."""
+
     images = glob.glob("./*.[jJ][pP][gG]")
     if len(images) == 0:
         error_str = ("Error: No images supplied!  "
@@ -339,18 +355,20 @@ def get_images():
         raise Exception(error_str)
     return images
 
-def extract_focal_length(images=[], scale=1.0, verbose=False):
+def extract_focal_length(images=[], scale=1.0):
     """Extracts (pixel) focal length from images where available.
     The functions returns a dictionary of image, focal length pairs.
     If no focal length is extracted for an image, the second pair is None.
     """
     if len(images) == 0:
-        if verbose: print "[- Creating list of images -]"
-        images = get_images()
+        error_str = ("Error: No images supplied!  "
+                     "No JPEG files found in directory!")
+        raise Exception(error_str)
 
-    ret = {}
+    ret = []
+
     for image in images:
-        if verbose: print "[Extracting EXIF tags from image {0}]".format(image)
+        print "[Extracting EXIF tags from image {0}]".format(image)
 
         tags = {}
         with open(image, 'rb') as fp:
@@ -360,8 +378,6 @@ def extract_focal_length(images=[], scale=1.0, verbose=False):
                 if exifinfo is not None:
                     for tag, value in exifinfo.items():
                         tags[ExifTags.TAGS.get(tag, tag)] = value
-
-        ret[image] = None
 
         # Extract Focal Length
         focalN, focalD = tags.get('FocalLength', (0, 1))
@@ -373,8 +389,6 @@ def extract_focal_length(images=[], scale=1.0, verbose=False):
         if img_width < img_height:
             img_width,img_height = img_height,img_width
 
-
-
         # Extract CCD Width (Prefer Lookup Table)
         ccd_width = 1.0
         make_model = tags.get('Make', '') + ' ' + tags.get('Model', '')
@@ -384,38 +398,31 @@ def extract_focal_length(images=[], scale=1.0, verbose=False):
             fplaneN, fplaneD = tags.get('FocalPlaneXResolution', (0, 1))
             if fplaneN != 0:
                 ccd_width = 25.4*float(img_width)*float(fplaneD)/float(fplaneN)
-                if verbose: print "  [Using CCD width from EXIF tags]"
+                print "  [Using CCD width from EXIF tags]"
             else:
                 ccd_width = 0
 
-        if verbose:
-            print "  [EXIF focal length = {0}mm]".format(focal_length)
-            print "  [EXIF CCD width = {0}mm]".format(ccd_width)
-            print "  [EXIF resolution = {0} x {1}]".format(
-                img_width, img_height)
-            if ccd_width == 0:
-                print "  [No CCD width available for camera {0}]".format(
-                    make_model)
+        print "  [EXIF focal length = {0}mm]".format(focal_length)
+        print "  [EXIF CCD width = {0}mm]".format(ccd_width)
+        print "  [EXIF resolution = {0} x {1}]".format(img_width, img_height)
+        if ccd_width == 0:
+           print "ERROR: No CCD width available for camera {0}]".format(make_model)
+           exit(1)
 
         if (img_width==0 or img_height==0 or focalN==0 or ccd_width==0):
-            if verbose: print "  [Could not determine pixel focal length]"
-            continue
+            print "ERROR: Could not determine pixel focal length for image", image
+            exit(1)
 
         # Compute Focal Length in Pixels
-        ret[image] = img_width * (focal_length / ccd_width) * scale
-        if verbose: print "  [Focal length (pixels) = {0}]".format(ret[image])
+        result =  img_width * (focal_length / ccd_width) * scale
+
+        ret.append((image, result))
+        print "  [Focal length (pixels) = {0}]".format(result)
 
     return ret
 
-def sift_image(image, verbose=False):
+def sift_image(image):
     """Extracts SIFT features from a single image.  See sift_images."""
-    global BIN_SIFT, BIN_PATH
-
-    if BIN_SIFT is None:
-        if sys.platform == 'win32' or sys.platform == 'cygwin':
-            BIN_SIFT = os.path.join(BIN_PATH, "siftWin32.exe")
-        else:
-            BIN_SIFT = os.path.join(BIN_PATH, "sift")
 
     pgm_filename = image.rsplit('.', 1)[0] + ".pgm"
     key_filename = image.rsplit('.', 1)[0] + ".key"
@@ -426,71 +433,33 @@ def sift_image(image, verbose=False):
         image.convert('L').save(pgm_filename)
 
     # Extract SIFT data
-    if verbose:
-        with open(pgm_filename, 'rb') as fp_in:
-            with open(key_filename, 'wb') as fp_out:
-                subprocess.call(BIN_SIFT, stdin=fp_in, stdout=fp_out)
-    else:
-        with open(pgm_filename, 'rb') as fp_in:
-            with open(key_filename, 'wb') as fp_out:
-                with open(os.devnull, 'w') as fp_err:
-                    subprocess.call(BIN_SIFT, stdin=fp_in, stdout=fp_out,
-                                    stderr=fp_err)
+    with open(pgm_filename, 'rb') as fp_in:
+        with open(key_filename, 'wb') as fp_out:
+            subprocess.call(BIN_SIFT, stdin=fp_in, stdout=fp_out)
 
     # Remove pgm file
     os.remove(pgm_filename)
 
     # GZIP compress key file (and remove)
-    with open(key_filename, 'rb') as fp_in:
-        with gzip.open(key_filename + ".gz", 'wb') as fp_out:
-            fp_out.writelines(fp_in)
-    os.remove(key_filename)
+#    with open(key_filename, 'rb') as fp_in:
+#        with gzip.open(key_filename + ".gz", 'wb') as fp_out:
+#            fp_out.writelines(fp_in)
+#    os.remove(key_filename)
 
     return key_filename
 
-def sift_images(images, verbose=False, parallel=True):
+def sift_images(images):
     """Extracts SIFT features from images in 'images'.
 
     'images' should be a list of file names.  The function creates a
     SIFT compressed key file for each image in 'images' with a '.key.gz'
     extension.  A list of the uncompressed key file names is returned.
 
-    If 'parallel' is True, the function executes SIFT in parallel.
-    """
-    global BIN_SIFT, BIN_PATH
+    """        
+    pool = ThreadPool()
+    return pool.map(sift_image, images)
 
-    key_filenames = []
-
-    if BIN_SIFT is None:
-        if sys.platform == 'win32' or sys.platform == 'cygwin':
-            BIN_SIFT = os.path.join(BIN_PATH, "siftWin32.exe")
-        else:
-            BIN_SIFT = os.path.join(BIN_PATH, "sift")
-        
-    if parallel:
-        pool = Pool()
-        key_filenames = pool.map(sift_image, images)
-    else:
-        for image in images:
-            key_filenames.append(sift_image(image, verbose=verbose))
-
-    return key_filenames
-
-def match_images(key_files, matches_file, verbose=False):
-    "Executes KeyMatchFull to match key points in images."""
-    global BIN_MATCHKEYS, BIN_PATH
-
-    if BIN_MATCHKEYS is None:
-        if sys.platform == 'win32' or sys.platform == 'cygwin':
-            BIN_MATCHKEYS = os.path.join(BIN_PATH, "KeyMatchFull.exe")
-        else:
-            BIN_MATCHKEYS = os.path.join(BIN_PATH, "KeyMatchFull")
-
-    keys_file = ""
-    with tempfile.NamedTemporaryFile(delete=False) as fp:
-        for key in key_files:
-            fp.write(key + '\n')
-        keys_file = fp.name
+def match_image(image):
 
     # Add lib folder to LD_LIBRARY_PATH
     env = dict(os.environ)
@@ -499,14 +468,41 @@ def match_images(key_files, matches_file, verbose=False):
     else:
         env['LD_LIBRARY_PATH'] = LIB_PATH
 
-    if verbose:
-        subprocess.call([BIN_MATCHKEYS, keys_file, matches_file], env=env)
-    else:
-        with open(os.devnull, 'w') as fp_out:
-            subprocess.call([BIN_MATCHKEYS, keys_file, matches_file],
-                            stdout=fp_out, env=env)
-            
+    matches_file = 'match.' + str(image[0]) + '.txt'
+
+    subprocess.call([BIN_MATCHKEYS_PART, image[1], str(image[0]), matches_file], env=env)
+
+    return matches_file
+        
+
+
+def par_match_images(key_file, image_count, matches_file):
+    "Executes KeyMatchPart to match key points in each image."""
+
+    images = []
+
+    for i in range(image_count-1, 0, -1):
+       images.append((i, key_file))
+
+    pool = ThreadPool()
+    match_filenames = pool.map(match_image, images)
+
+    with open(matches_file, 'w') as fout:
+       for line in fileinput.input(match_filenames):
+          fout.write(line)    
+
+
+def match_images(key_files, matches_file):
+
+    keys_file = ""
+    with tempfile.NamedTemporaryFile(delete=False) as fp:
+        for key in key_files:
+            fp.write(key + '\n')
+        keys_file = fp.name
+
+    par_match_images(keys_file, len(key_files), matches_file)
     os.remove(keys_file)
+
 
 def bundler(image_list=None, options_file=None, shell=False, *args, **kwargs):
     """Run bundler, parsing arguments from args and kwargs through.
@@ -516,29 +512,25 @@ def bundler(image_list=None, options_file=None, shell=False, *args, **kwargs):
     options_file : Specify an options file for bundler (optional).
     shell : Enable full shell support for parsing args (default: False).
     """
-    global BIN_BUNDLER, BIN_PATH
-
-    if BIN_BUNDLER is None:
-        if sys.platform == 'win32' or sys.platform == 'cygwin':
-            BIN_BUNDLER = os.path.join(BIN_PATH, "Bundler.exe")
-        else:
-            BIN_BUNDLER = os.path.join(BIN_PATH, "bundler")
 
     def kwargs_bool(b, r):
         if b: return r
         else: return []
 
     kwargs_dict = {
-        'match_table'            : lambda k,v: ['--'+k,v],
-        'output'                 : lambda k,v: ['--'+k,v],
-        'output_all'             : lambda k,v: ['--'+k,v],
-        'output_dir'             : lambda k,v: ['--'+k,v],
-        'variable_focal_length'  : lambda k,v: kwargs_bool(v, ['--'+k]),
-        'use_focal_estimate'     : lambda k,v: kwargs_bool(v, ['--'+k]),
-        'constrain_focal'        : lambda k,v: kwargs_bool(v, ['--'+k]),
-        'constrain_focal_weight' : lambda k,v: ['--'+k,str(v)],
-        'estimate_distortion'    : lambda k,v: kwargs_bool(v, ['--'+k]),
-        'run_bundle'             : lambda k,v: kwargs_bool(v, ['--'+k]),
+        'match_table'                     : lambda k,v: ['--'+k,v],
+        'output'                          : lambda k,v: ['--'+k,v],
+        'output_all'                      : lambda k,v: ['--'+k,v],
+        'output_dir'                      : lambda k,v: ['--'+k,v],
+        'variable_focal_length'           : lambda k,v: kwargs_bool(v, ['--'+k]),
+        'use_focal_estimate'              : lambda k,v: kwargs_bool(v, ['--'+k]),
+        'constrain_focal'                 : lambda k,v: kwargs_bool(v, ['--'+k]),
+        'constrain_focal_weight'          : lambda k,v: ['--'+k,str(v)],
+        'estimate_distortion'             : lambda k,v: kwargs_bool(v, ['--'+k]),
+        'projection_estimation_threshold' : lambda k,v: ['--'+k,str(v)],
+        'construct_max_connectivity'      : lambda k,v: kwargs_bool(v, ['--'+k]),
+        'use_ceres'                       : lambda k,v: kwargs_bool(v, ['--'+k]),
+        'run_bundle'                      : lambda k,v: kwargs_bool(v, ['--'+k]),
     }
 
     str_args = [a for a in args if type(a) == str]
@@ -586,32 +578,146 @@ def bundler(image_list=None, options_file=None, shell=False, *args, **kwargs):
     if type(image_list) == dict:
         os.remove(image_list_file)
 
-def run_bundler(images=[], verbose=False, parallel=True):
+
+def save_image_list(image_list=None, filename='list.txt'):
+    with open(filename, 'wb') as fp:
+       for image in image_list:
+          fp.write(' '.join([image[0], '0', str(image[1]), '\n']))
+
+
+def create_dense_pointcloud(image_names, image_list='list.txt', bundle_out="bundle.out"):
+
+    # Start by running bundle2pmvs. This will create the pmvs directory, and 
+    # generate the undistortion matrices for each image. 
+
+    # Add lib folder to LD_LIBRARY_PATH
+    env = dict(os.environ)
+    if env.has_key('LD_LIBRARY_PATH'):
+        env['LD_LIBRARY_PATH'] = env['LD_LIBRARY_PATH'] + ':' + LIB_PATH
+    else:
+        env['LD_LIBRARY_PATH'] = LIB_PATH
+
+    bundle_output = os.path.join('bundle', 'bundle.out')
+
+    subprocess.call([BIN_BUNDLE2PMVS, image_list, bundle_output], env=env)
+
+    # Next run the image undistort.
+    subprocess.call([BIN_RADIAL_UNDISTORT, image_list, bundle_output, 'pmvs'], env=env)
+    
+    # Create the necessay directories
+    try:    os.mkdir(os.path.join('pmvs', 'txt'))
+    except: pass
+
+    try:    os.mkdir(os.path.join('pmvs', 'visualize'))
+    except: pass
+
+    try:    os.mkdir(os.path.join('pmvs', 'models'))
+    except: pass
+
+    # Move some temp files to their final location. This is needed by CMVS
+    count = 0 
+
+    for image in image_names:
+       source = image.rsplit('.', 1)[0] + '.rd.jpg'
+       target = str(count).zfill(8) + '.jpg'
+       if os.path.exists(os.path.join('pmvs', source)):
+          shutil.move(os.path.join('pmvs', source), os.path.join('pmvs', 'visualize', target))
+          source = str(count).zfill(8) + '.txt'
+          shutil.move(os.path.join('pmvs', source), os.path.join('pmvs', 'txt', source))
+          count += 1 
+
+    # Run CMVS to generate the required centers.ply and vis.dat
+    # FIXME: hardcoded CPU count!
+    subprocess.call([BIN_CMVS, os.path.join('.', 'pmvs', ''), '100', '16'], env=env)
+
+    # Run genOption to generate the required PMVS2 config.
+    # FIXME: hardcoded level! 1 is standard, 0 produces hi-res pointclouds!
+    subprocess.call([BIN_GEN_OPTION, os.path.join('.', 'pmvs', ''), '1'], env=env)
+
+    # Run genOption to generate the required PMVS2 config.
+    subprocess.call([BIN_PMVS2, os.path.join('.', 'pmvs', ''), 'option-0000'], env=env)
+
+
+def run_bundler():
     """Prepare images and run bundler with default options."""
+
+    # Prepare the list of executables we need.
+    global BIN_SIFT, BIN_BUNDLER, BIN_MATCHKEYS_FULL, BIN_MATCHKEYS_PART, BIN_BUNDLE2PMVS, BIN_RADIAL_UNDISTORT, BIN_CMVS, BIN_GEN_OPTION, BIN_PMVS2, BIN_PATH
+
+    start = time.time()
+
+    if sys.platform == 'win32' or sys.platform == 'cygwin':
+        BIN_SIFT = os.path.join(BIN_PATH, "siftWin32.exe")
+        BIN_BUNDLER = os.path.join(BIN_PATH, "Bundler.exe")
+        BIN_MATCHKEYS_FULL = os.path.join(BIN_PATH, "KeyMatchFull.exe")
+        BIN_MATCHKEYS_PART = os.path.join(BIN_PATH, "KeyMatchPart.exe")
+        BIN_BUNDLE2PMVS = os.path.join(BIN_PATH, "Bundle2PMVS.exe")
+        BIN_RADIAL_UNDISTORT = os.path.join(BIN_PATH, "RadialUndistort.exe")
+        BIN_CMVS = os.path.join(BIN_PATH, "cmvs.exe")
+        BIN_GEN_OPTION = os.path.join(BIN_PATH, "genOption.exe")
+        BIN_PMVS2 = os.path.join(BIN_PATH, "pmvs2.exe")
+    else:
+        BIN_SIFT = os.path.join(BIN_PATH, "sift")
+        BIN_BUNDLER = os.path.join(BIN_PATH, "bundler")
+        BIN_MATCHKEYS_FULL = os.path.join(BIN_PATH, "KeyMatchFull")
+        BIN_MATCHKEYS_PART = os.path.join(BIN_PATH, "KeyMatchPart")
+        BIN_BUNDLE2PMVS = os.path.join(BIN_PATH, "Bundle2PMVS")
+        BIN_RADIAL_UNDISTORT = os.path.join(BIN_PATH, "RadialUndistort")
+        BIN_CMVS = os.path.join(BIN_PATH, "cmvs")
+        BIN_GEN_OPTION = os.path.join(BIN_PATH, "genOption")
+        BIN_PMVS2 = os.path.join(BIN_PATH, "pmvs2")
+
     # Create list of images
-    if len(images) == 0:
-        if verbose: print "[- Creating list of images -]"
-        images = get_images()
+    print "[- Creating list of images -]"
+    images = get_images()
+
+    time1 = time.time()
+
+    if len(images) < 10:
+       print "ERROR: not enough images (have %d, need at least 10)" % len(images)
+       exit(1)
+    else:   
+       print "[- Retrieved %d images in %.1f seconds -]" % (len(images), time1-start)
 
     # Extract focal length
-    if type(images) == list:
-        if verbose: print "[- Extracting EXIF tags from images -]"
-        images = extract_focal_length(images, verbose=verbose)
+    print "[- Extracting EXIF tags from images -]"
+    images_focal = extract_focal_length(images)
+
+    time2 = time.time()
+
+    print "[- Retrieved EXIF tags of %d images in %.1f seconds -]" % (len(images_focal), time2-time1)
+
+    if not len(images_focal) == len(images):
+       print "ERROR: some images are missing necessasy EXIF information!" 
+       exit(1)
+
+    # Save the image list, since we need it later on. 
+    save_image_list(images_focal)
 
     # Extract SIFT features from images
-    if verbose: print "[- Extracting keypoints -]"
-    key_files = sift_images(images, parallel=parallel, verbose=verbose)
+    print "[- Extracting keypoints -]"
+    key_files = sift_images(images)
+
+    time3 = time.time()
+
+    print "[- Extracting keypoints took %.1f seconds -]" % (time3-time2)
 
     # Match images
-    if verbose: print "[- Matching keypoints (this can take a while) -]"
+    print "[- Matching keypoints (this can take a while) -]"
+
     matches_file = "matches.init.txt"
-    match_images(key_files, matches_file, verbose=verbose)
+    match_images(key_files, matches_file)
+
+    time4 = time.time()
+
+    print "[- Matching keypoints took %.1f seconds -]" % (time4-time3)
 
     # Run Bundler
-    if verbose: print "[- Running Bundler -]"
-    bundler(image_list=images,
+
+    print "[- Running Bundler (sparse pointcloud generation) -]"
+
+    bundler(image_list='list.txt', 
             options_file="options.txt",
-            verbose=verbose,
             match_table=matches_file,
             output="bundle.out",
             output_all="bundle_",
@@ -621,27 +727,25 @@ def run_bundler(images=[], verbose=False, parallel=True):
             constrain_focal=True,
             constrain_focal_weight=0.0001,
             estimate_distortion=True,
+            projection_estimation_threshold=1.1,
+            construct_max_connectivity=True, 
+            use_ceres=True, 
             run_bundle=True)
 
-    if verbose: print "[- Done -]"
+    time4 = time.time()
+
+    print "[- Bundler took %.1f seconds-]" % (time4-time3)
+
+    print "[- Creating CMVS/PMVS configuration and running PMVS2 -]"
+
+    create_dense_pointcloud(images, image_list='list.txt', bundle_out="bundle.out")
+
+    end = time.time()
+
+    print "[- Creating dense point cloud took %.1f seconds -]" % (end-time4)
+
+    print "[- Done in %.1f seconds -]" % (end-start)
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description=DESCRIPTION)
-    parser.add_argument('-v', '--verbose', action='store_true',
-        help="generate additional output in execution", default=False)
-    parser.add_argument('--version', action='version', version=VERSION)
-    parser.add_argument('--no-parallel', action='store_true',
-        help="disable parallelisation", default=False)
-    parser.add_argument('--extract-focal', action='store_true',
-        help="only create list of images to be reconstructed", default=False)
-    args = parser.parse_args()
-
-    if args.extract_focal:
-        images = extract_focal_length(verbose=args.verbose)
-        with open("list.txt", 'w') as fp:
-            for image,value in images.items():
-                if value == None: fp.write(image + '\n')
-                else: fp.write(' '.join([image, '0', str(value), '\n']))
-    else:
-        run_bundler(verbose=args.verbose, parallel=not args.no_parallel)
+    run_bundler()
 

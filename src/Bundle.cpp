@@ -1699,6 +1699,10 @@ void BundlerApp::BundlePickInitialPair(int &i_best, int &j_best,
             j_best = j_best_2;
         }
     }
+
+    printf("[BundleAdjust] Selected initial pair "
+            "%d and %d\n", i_best, j_best);
+
 }
 
 /* Setup the initial camera pair for bundle adjustment */

@@ -1,6 +1,6 @@
 # Makefile for bundler
 
-# USE_CERES=true
+USE_CERES=true
 
 CC=gcc
 CXX=g++
@@ -13,12 +13,14 @@ OS=$(shell uname -o)
 ifeq ($(OS), Cygwin)
 BUNDLER=bundler.exe
 KEYMATCHFULL=KeyMatchFull.exe
+KEYMATCHPART=KeyMatchPart.exe
 BUNDLE2PMVS=Bundle2PMVS.exe
 BUNDLE2VIS=Bundle2Vis.exe
 RADIALUNDISTORT=RadialUndistort.exe
 else
 BUNDLER=bundler
 KEYMATCHFULL=KeyMatchFull
+KEYMATCHART=KeyMatchPart
 BUNDLE2PLY=Bundle2Ply
 BUNDLE2PMVS=Bundle2PMVS
 BUNDLE2VIS=Bundle2Vis
@@ -48,8 +50,8 @@ CERES_LIBS=-lceres -lcholmod -lccolamd -lcolamd -lamd -lcamd -lcxsparse \
 # if we are using Ceres, add to options
 ifeq ($(USE_CERES),true)
 # Edit these two variables as needed
-CERES_INCLUDE_PATH=
-CERES_LIB_PATH=
+CERES_INCLUDE_PATH=-I/usr/local/include/ceres/
+CERES_LIB_PATH=-L/usr/local/lib/
 BUNDLER_DEFINES+=-D__USE_CERES__
 BUNDLER_LIBS=$(CERES_LIBS) $(BUNDLER_BASE_LIBS)
 BUNDLER_OBJS+=BundleCeres.o
@@ -62,7 +64,7 @@ endif
 
 CPPFLAGS=$(OPTFLAGS) $(OTHERFLAGS) $(INCLUDE_PATH)
 
-all: $(BUNDLER) $(KEYMATCHFULL) $(BUNDLE2PLY) $(BUNDLE2PMVS) $(BUNDLE2VIS) $(RADIALUNDISTORT)
+all: $(BUNDLER) $(KEYMATCHFULL) $(BUNDLE2PLY) $(BUNDLE2PMVS) $(BUNDLE2VIS) $(RADIALUNDISTORT) $(KEYMATCHPART)
 
 %.o : %.cpp
 	$(CXX) -c -o $@ $(CPPFLAGS) $(WXFLAGS) $(BUNDLER_DEFINES) $<
@@ -76,6 +78,11 @@ $(KEYMATCHFULL): KeyMatchFull.o keys2a.o
 	$(CXX) -o $@ $(CPPFLAGS) $(LIB_PATH) KeyMatchFull.o keys2a.o \
 		-lANN_char -lz
 	cp $@ ../bin
+
+$(KEYMATCHPART): KeyMatchPart.o keys2a.o
+        $(CXX) -o $@ $(CPPFLAGS) $(LIB_PATH) KeyMatchPart.o keys2a.o \
+                -lANN_char -lz
+        cp $@ ../bin
 
 $(BUNDLE2PLY): Bundle2Ply.o
 	$(CXX) -o $@ $(CPPFLAGS) $(LIB_PATH) Bundle2Ply.o \
@@ -108,4 +115,4 @@ MatchDraw2: MatchDraw2.o keys_lite.o LoadJPEG.o
 
 clean:
 	rm -f *.o *~ $(BUNDLER) $(KEYMATCHFULL) $(BUNDLE2PMVS) \
-		$(BUNDLE2VIS) $(RADIALUNDISTORT)
+		$(BUNDLE2VIS) $(RADIALUNDISTORT) $(KEYMATCHPART)
