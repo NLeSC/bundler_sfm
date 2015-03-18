@@ -737,9 +737,9 @@ def run_bundler():
             use_ceres=True, 
             run_bundle=True)
 
-    time4 = time.time()
+    time5 = time.time()
 
-    print "[- Bundler took %.1f seconds-]" % (time4-time3)
+    print "[- Bundler took %.1f seconds-]" % (time5-time4)
 
     print "[- Creating CMVS/PMVS configuration and running PMVS2 -]"
 
@@ -747,7 +747,7 @@ def run_bundler():
 
     end = time.time()
 
-    print "[- Creating dense point cloud took %.1f seconds -]" % (end-time4)
+    print "[- Creating dense point cloud took %.1f seconds -]" % (end-time5)
 
     print "[- Done in %.1f seconds -]" % (end-start)
 
