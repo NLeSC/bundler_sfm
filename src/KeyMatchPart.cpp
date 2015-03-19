@@ -59,22 +59,28 @@ int ReadFileList(char* list_in, std::vector<std::string>& key_files) {
 int main(int argc, char **argv) {
     char *list_in;
     char *file_out;
-    double ratio;
+    double ratio = 0.6;
+    int window_radius = -1;
 
-    if (argc != 4 && argc != 5) {
-        printf("Usage: %s <list.txt> <image> <outfile> [window_radius]\n", argv[0]);
+    if (argc < 4 || argc > 6) {
+        printf("Usage: %s <list.txt> <image> <outfile> [ratio] [window_radius]\n", argv[0]);
         return EXIT_FAILURE;
     }
 
     list_in = argv[1];
 
     int start_image = atoi(argv[2]);
+    file_out = argv[3];
 
-    ratio = 0.6;
-    file_out = argv[3]; 
+    if (argc >= 5) {
+       ratio = atof(argv[4]);
 
-    int window_radius = -1;
-    if (argc == 5) {
+       if (ratio <= 0 || ratio >= 1) {
+          fprintf(stderr, "Invalid ratio %f\n", ratio);
+       }
+    }
+
+    if (argc == 6) {
         window_radius = atoi(argv[4]);
     }
 
