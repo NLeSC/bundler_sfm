@@ -1341,7 +1341,7 @@ void SIFT::DrawLine(Image& image, int r1, int c1, int r2, int c2)
 
 int main(int argc, char** argv) {
 
-  float value = 0.04;
+  float value = 0.08;
   Lowe::SIFT::Image image;
   Lowe::SIFT sift = SIFT();
 
