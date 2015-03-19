@@ -296,13 +296,13 @@ void ImageData::LoadImage() {
     bmp_buf[strlen(m_name) - 1] = 'p';
 
     char BMP_buf[256];
-    strcpy(bmp_buf, m_name);
+    strcpy(BMP_buf, m_name);
     bmp_buf[strlen(m_name) - 3] = 'B';
     bmp_buf[strlen(m_name) - 2] = 'M';
     bmp_buf[strlen(m_name) - 1] = 'P';
 
     char JPEG_buf[256];
-    strcpy(jpeg_buf, m_name);
+    strcpy(JPEG_buf, m_name);
     jpeg_buf[strlen(m_name) - 3] = 'J';
     jpeg_buf[strlen(m_name) - 2] = 'P';
     jpeg_buf[strlen(m_name) - 1] = 'G';
@@ -317,8 +317,11 @@ void ImageData::LoadImage() {
         img = LoadJPEG(JPEG_buf);
     } else if (FileExists(BMP_buf)) {
         img = img_read_bmp_file(BMP_buf);
-    } else {
+    } else if (FileExists(m_name)) {
         img = img_read_pgm_file(m_name);
+    } else {
+        fprintf(stderr, "Cannot find input file for %s\n", m_name);
+        exit(1);
     }
 
     m_img = img;
@@ -1016,8 +1019,9 @@ void ImageData::CacheDimensions()
         } else if (FileExists(JPG_file)) {
             GetJPEGDimensions(JPG_file, w, h);
         } else {
-            printf("[ImageData::CacheDimensions] Fatal error: "
+            fprintf(stderr, "[ImageData::CacheDimensions] Fatal error: "
                      "couldn't read image %s\n", m_name);
+            exit(1);
 	}
     }
 
@@ -1911,6 +1915,7 @@ void ImageData::ReadKeyColors()
     GetRotationFromSpherical(-0.5 * M_PI, 0.5 * M_PI, ident);
 
     bool unload = false;
+
     if (!m_image_loaded) {
 	LoadImage();
 	unload = true;
